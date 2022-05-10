@@ -23,42 +23,86 @@ func TestCache_Set(t *testing.T) {
 		var k1, k2, k3 string = "ky1", "ky2", "ky3"
 		var v1, v2, v3 defaultStringValue = "hah", "ddd", "ccc"
 		ca := New(12, nil)
-		ca.Set(k1,v1)
-		ca.Set(k2,v2)
-		ca.Set(k3,v3)
+		ca.Set(k1, v1)
+		ca.Set(k2, v2)
+		ca.Set(k3, v3)
 
 		Convey("test for get key from cache ", func() {
-			expect := []string {"hah", "ddd", "ccc"}
-			give := []string {"ky1", "ky2", "ky3"}
-			for k,v := range give {
-				res ,ok := ca.Get(v)
+			expect := []string{"hah", "ddd", "ccc"}
+			give := []string{"ky1", "ky2", "ky3"}
+			for k, v := range give {
+				res, ok := ca.Get(v)
 				if !ok {
 					t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", v, expect[k])
 				}
-				So(string(res.(defaultStringValue)) ,ShouldEqual,expect[k])
+				So(string(res.(defaultStringValue)), ShouldEqual, expect[k])
 			}
 		})
 
 		Convey("test for set value repeat ", func() {
-			ca.Set(k1,defaultStringValue("cccc"))
-			res ,ok := ca.Get(k1)
+			ca.Set(k1, defaultStringValue("cccc"))
+			res, ok := ca.Get(k1)
 			if !ok {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", k1, "cccc")
 			}
-			So(string(res.(defaultStringValue)) ,ShouldEqual,"cccc")
+			So(string(res.(defaultStringValue)), ShouldEqual, "cccc")
 		})
 
 		Convey("test for set nil value ", func() {
-			ca.Set("k5",nil)
-			ca.Set("",nil)
-			_ ,ok := ca.Get("k5")
-			_ ,ok1 := ca.Get("")
-			So(ok ,ShouldEqual,false)
-			So(ok1 ,ShouldEqual,false)
+			ca.Set("k5", nil)
+			ca.Set("", nil)
+			_, ok := ca.Get("k5")
+			_, ok1 := ca.Get("")
+			So(ok, ShouldEqual, false)
+			So(ok1, ShouldEqual, false)
+		})
+
+		Convey("test for set a bigger than capacity value ", func() {
+			err := ca.Set("haha", defaultStringValue("i am a bigger data witch is bigger than maxBytes setting"))
+			if err == nil {
+				t.Fatalf("Call Set func failed, give a big-Value , expect err,but get nil  ")
+			}
+			So(err, ShouldEqual, ErrValueIsBiggerThanMaxByte)
 		})
 	})
 }
 
+func TestCache_Get(t *testing.T) {
+	Convey("test get key from cache", t, func() {
+		ca := New(5000, nil)
+		ca.Set("key1", defaultStringValue("im good man"))
+		ca.Set("key2", defaultStringValue("im good man1"))
+		ca.Set("key3", defaultStringValue("im good man2"))
+		Convey("test get key witch existed ", func() {
+			v, ok := ca.Get("key1")
+			if !ok {
+				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", "key1", "im good man")
+			}
+			So(string(v.(defaultStringValue)), ShouldEqual, "im good man")
+		})
+		Convey("test get a not exist key  ", func() {
+			_, ok := ca.Get("key4")
+			So(ok, ShouldEqual, false)
+		})
+	})
+}
 
-
-
+func TestCache_GetTargetKeyLockerWithTimeOut(t *testing.T) {
+	Convey("test set a key with Distributed lock", t, func() {
+		ca := New(5000, nil)
+		ca.Set("key1", defaultStringValue("im good man"))
+		ca.Set("key2", defaultStringValue("im good man1"))
+		ca.Set("key3", defaultStringValue("im good man2"))
+		Convey("test get key witch existed ", func() {
+			v, ok := ca.Get("key1")
+			if !ok {
+				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", "key1", "im good man")
+			}
+			So(string(v.(defaultStringValue)), ShouldEqual, "im good man")
+		})
+		Convey("test get a not exist key  ", func() {
+			_, ok := ca.Get("key4")
+			So(ok, ShouldEqual, false)
+		})
+	})
+}
