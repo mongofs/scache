@@ -21,7 +21,7 @@ type Cache interface {
 	Set(key string, value Value) error
 
 	// 删除一个key值
-	Del(key string) error
+	Del(key string)
 
 	// 过期某个值
 	Expire(key string, ttl int64)
@@ -33,4 +33,37 @@ type Cache interface {
 	// 调用f 闭包方法，并将返回值存入Cache中。这里还存在一个问题，时间问题，如果f 执行时间过长
 	// 那么需要一个超时返回，此时就会报错，所有调用这个方法的请求都将收到这个错误返回
 	GetTargetKeyLockerWithTimeOut(targetKey string, f func() (Value, error)) (Value, error)
+}
+
+type Capacity interface {
+
+	Limit() int64
+
+	// Used 使用的Byte
+	Used() int64
+
+	// 最大
+	Max() int64
+
+	// 查看用户
+	Number() int64
+}
+
+
+type KVServer  interface {
+	// 获取到一个值，key值，当key不存在的时候返回错误。存在就返回具体内容
+	Get(key string) (value Value, ok bool)
+
+	// 设置一个值到缓存当中
+	Set(key string, value Value) error
+
+	// 删除一个key值
+	Del(key string)
+
+	// 过期某个值
+	Expire(key string, ttl int64)
+
+	// 设置一个值，并为这个值设置一个过期时间
+	SetWithTTL(key string, content []byte, ttl int64) error
+
 }

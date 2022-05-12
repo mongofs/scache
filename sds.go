@@ -13,7 +13,7 @@
 
 package Scache
 
-import "unsafe"
+import "sync"
 
 // sds is a short of simple dynamic string
 
@@ -24,6 +24,15 @@ const (
 	SDSStatusNormal
 )
 
+var sdsPool = sync.Pool{New: func() interface{} {
+	return &sds{
+		key:    "",
+		expire: 0,
+		st:     SDSStatusNormal,
+		Value:  nil,
+	}
+}}
+
 type sds struct {
 	key    string // key
 	expire int64  // 过期时间
@@ -32,6 +41,12 @@ type sds struct {
 	Value Value
 }
 
+func NewSDS(key string, value Value) *sds {
+	sd := sdsPool.Get().(*sds)
+	sd.key = key
+	sd.Value = value
+	return sd
+}
 func (s *sds) Status() SDSStatus {
 	return s.st
 }
@@ -44,9 +59,9 @@ func (s *sds) ReUse() {
 	s.st = SDSStatusDelete
 }
 
-// todo
+//Calculation  这里 计算只计算sds的key值 + value值的大小
 func (s *sds) Calculation() int {
-	return int(unsafe.Sizeof(*s))
+	return len(s.key) + s.Value.Len()
 }
 
 type Value interface {
