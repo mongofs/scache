@@ -32,22 +32,10 @@ type Cache interface {
 	// 获取到targetKey值，如果说这个值存在则从内存中获取，如果从内存中获取不到，则
 	// 调用f 闭包方法，并将返回值存入Cache中。这里还存在一个问题，时间问题，如果f 执行时间过长
 	// 那么需要一个超时返回，此时就会报错，所有调用这个方法的请求都将收到这个错误返回
-	GetTargetKeyLockerWithTimeOut(targetKey string, f func() (Value, error)) (Value, error)
+	GetTargetWithSlowFunc(targetKey string, f func() (Value, error)) (Value, error)
 }
 
-type Capacity interface {
 
-	Limit() int64
-
-	// Used 使用的Byte
-	Used() int64
-
-	// 最大
-	Max() int64
-
-	// 查看用户
-	Number() int64
-}
 
 
 type KVServer  interface {

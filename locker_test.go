@@ -23,8 +23,10 @@ import (
 
 var mockerCaller OnCall = func() (Value,error){
 	time.Sleep(3 * time.Second)
+	// select * from list
 	return defaultStringValue("steven "),nil
 }
+
 
 func  TestLocker_Get(t *testing.T) {
 	Convey("test 10 req  parallel",t, func() {

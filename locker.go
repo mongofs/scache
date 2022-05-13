@@ -21,6 +21,7 @@ type OnCall func() (Value, error)
 
 type Topic struct {
 
+	// 保护notify的用户切片集合
 	rw sync.RWMutex
 
 	// notify 是订阅了这个主题的所有请求的集合
@@ -32,7 +33,9 @@ type Topic struct {
 
 // publish 发布具体的内容
 func (o *Topic) publish(value *notify) {
-	if  len(o.notify) == 0 { return }
+	if len(o.notify) == 0 {
+		return
+	}
 	o.rw.Lock()
 	for _, v := range o.notify {
 		tev := v
@@ -53,8 +56,8 @@ type notify struct {
 	err   error
 }
 
-// 这里是一个分布式锁的快捷实现
-type Locker struct {
+// 这里是一个分布式锁的快捷实现 ， short for distributed lock
+type DLock struct {
 	rw *sync.RWMutex
 
 	// 这里是一个观察者，用户可以订阅，内部调用push 方法,用户请求到内部大概率会被
@@ -74,20 +77,18 @@ type Locker struct {
 	Subscribe func(key string) (Value, error)
 }
 
-func NewLocker (expire int )*Locker{
-	l:= &Locker{
+func NewLocker(expire int) *DLock {
+	l := &DLock{
 		rw:         &sync.RWMutex{},
-		obs: map[string]*Topic{},
-		flags: map[string]struct{}{},
+		obs:        map[string]*Topic{},
+		flags:      map[string]struct{}{},
 		expireTime: 5,
 		Subscribe:  nil,
 	}
-	l.defaultSubscribe()
 	return l
 }
 
-
-func (l *Locker) defaultSubscribe() {
+func (l *DLock) defaultSubscribe() {
 	if l.Subscribe != nil {
 		return
 	}
@@ -103,9 +104,8 @@ func (l *Locker) defaultSubscribe() {
 	l.Subscribe = subscribe
 }
 
-
 // RegisterObserver 必须提前定义好slow函数
-func (l *Locker) RegisterObserver(call OnCall, topic string) (*Topic, error) {
+func (l *DLock) RegisterObserver(call OnCall, topic string) (*Topic, error) {
 	l.rw.Lock()
 	defer l.rw.Unlock()
 	if _, ok := l.obs[topic]; ok {
@@ -120,7 +120,7 @@ func (l *Locker) RegisterObserver(call OnCall, topic string) (*Topic, error) {
 }
 
 // RegisterNotify 注册异步通知的回调函数
-func (l *Locker) RegisterNotify(topic string, ch chan *notify) error {
+func (l *DLock) RegisterNotify(topic string, ch chan *notify) error {
 	l.rw.RLock()
 	defer l.rw.RUnlock()
 	ob, ok := l.obs[topic]
@@ -132,19 +132,19 @@ func (l *Locker) RegisterNotify(topic string, ch chan *notify) error {
 }
 
 // Notify
-func (l *Locker) Notify (topicName string,no *notify){
+func (l *DLock) Notify(topicName string, no *notify) {
 	l.rw.Lock()
 	defer l.rw.Unlock()
 	v, ok := l.obs[topicName]
 	if ok {
 		v.publish(no)
 	}
-	delete(l.flags,topicName)
-	delete(l.obs,topicName)
+	delete(l.flags, topicName)
+	delete(l.obs, topicName)
 }
 
 // 创建锁进行建立请求 ,set topic if not exist
-func (l *Locker) setNx(topic string) bool {
+func (l *DLock) setNx(topic string) bool {
 	l.rw.Lock()
 	defer l.rw.Unlock()
 	if _, ok := l.flags[topic]; ok {
@@ -161,11 +161,17 @@ func (l *Locker) setNx(topic string) bool {
 // if !exist {
 // 	 locker.Get(targetKey)
 // }
-func (l *Locker) Get(topicName string, items ...interface{}) (Value, error) {
-	if topicName == "" {
+func (l *DLock) Get(topicName string, items ...interface{}) (Value, error) {
+
+	if l.Subscribe == nil {
+		l.defaultSubscribe()
 	}
-	if len(items) <= 1 {
-		// todo
+
+	if topicName == "" {
+		return nil, ErrInValidParam
+	}
+	if len(items) <1  {
+		return nil, ErrInValidParam
 	}
 	Call, ok := items[0].(OnCall)
 	if !ok {
@@ -187,7 +193,7 @@ func (l *Locker) Get(topicName string, items ...interface{}) (Value, error) {
 			value: v,
 			err:   err,
 		}
-		l.Notify(topicName,niy)
+		l.Notify(topicName, niy)
 		return v, err
 	} else {
 		// 设置锁失败发起订阅
