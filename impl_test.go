@@ -33,8 +33,8 @@ func TestCacheImpl_Set(t *testing.T) {
 			expect := []string{"hah", "ddd", "ccc"}
 			give := []string{"ky1", "ky2", "ky3"}
 			for k, v := range give {
-				res, ok := ca.Get(v)
-				if !ok {
+				res, err := ca.Get(v)
+				if err !=nil  {
 					t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", v, expect[k])
 				}
 				So(string(res.(defaultStringValue)), ShouldEqual, expect[k])
@@ -43,8 +43,8 @@ func TestCacheImpl_Set(t *testing.T) {
 
 		Convey("test for set value repeat ", func() {
 			ca.Set(k1, defaultStringValue("cccc"))
-			res, ok := ca.Get(k1)
-			if !ok {
+			res, err := ca.Get(k1)
+			if err !=nil  {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", k1, "cccc")
 			}
 			So(string(res.(defaultStringValue)), ShouldEqual, "cccc")
@@ -76,11 +76,11 @@ func TestCacheImpl_Get(t *testing.T) {
 		ca.Set("key2", defaultStringValue("im good man1"))
 		ca.Set("key3", defaultStringValue("im good man2"))
 		Convey("test get key witch existed ", func() {
-			v, ok := ca.Get("key1")
-			if !ok {
+			res, err := ca.Get("key1")
+			if err !=nil  {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", "key1", "im good man")
 			}
-			So(string(v.(defaultStringValue)), ShouldEqual, "im good man")
+			So(string(res.(defaultStringValue)), ShouldEqual, "im good man")
 		})
 		Convey("test get a not exist key  ", func() {
 			_, ok := ca.Get("key4")

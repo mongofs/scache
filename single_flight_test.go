@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var mockerCaller OnCall = func() (Value,error){
+var mockerCaller  = func() (Value,error){
 	time.Sleep(3 * time.Second)
 	// select * from list
 	return defaultStringValue("steven "),nil
@@ -30,11 +30,11 @@ var mockerCaller OnCall = func() (Value,error){
 
 func  TestLocker_Get(t *testing.T) {
 	Convey("test 10 req  parallel",t, func() {
-		ob :=NewLocker(10)
+		ob :=NewSingleFlight(10)
 		in := atomic.Int32{}
 		for i :=0 ;i<50 ;i ++ {
 			go func() {
-				value ,err := ob.Get("10", mockerCaller)
+				value ,_,err := ob.Get("10", mockerCaller)
 				in.Inc()
 				fmt.Println(value,err)
 			}()

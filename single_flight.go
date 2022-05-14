@@ -14,13 +14,17 @@
 package Scache
 
 import (
+	"errors"
 	"sync"
+	"time"
 )
 
-type OnCall func() (Value, error)
+var (
+	ErrTopicNotExist = errors.New("sCache : topic not exist ")
+)
+
 
 type Topic struct {
-
 	// 保护notify的用户切片集合
 	rw sync.RWMutex
 
@@ -56,56 +60,47 @@ type notify struct {
 	err   error
 }
 
+type SingleFlight interface {
+	Get(regulation string, slowWay func()(Value,error)) (Value, bool, error)
+}
+
 // 这里是一个分布式锁的快捷实现 ， short for distributed lock
-type DLock struct {
+type defaultSingleFlight struct {
 	rw *sync.RWMutex
 
 	// 这里是一个观察者，用户可以订阅，内部调用push 方法,用户请求到内部大概率会被
 	// 阻塞到observer 当中，最好使
 	obs map[string]*Topic
 
-	// 标记是否存在用户
-	flags map[string]struct{}
+	flag map[string]struct{}
 
 	// 超时时间，如果存在update方法特别慢，超过了expiretime的最大等待时间，那么
 	// 就会返回超时错误
-	expireTime int
-
-	// 请求进入，会优先走到这个方法，这个方法后才会实现具体阻塞的方案，整体调用逻辑
-	// subscribe -> observer.subscribe ,用户可以在这里去截断，去添加一些中间层
-	// 比如添加整体耗时记录等操作
-	Subscribe func(key string) (Value, error)
+	MaxWaitTime int
 }
 
-func NewLocker(expire int) *DLock {
-	l := &DLock{
-		rw:         &sync.RWMutex{},
-		obs:        map[string]*Topic{},
-		flags:      map[string]struct{}{},
-		expireTime: 5,
-		Subscribe:  nil,
+func NewSingleFlight(maxWaitTime int) SingleFlight {
+	l := &defaultSingleFlight{
+		rw:          &sync.RWMutex{},
+		obs:         map[string]*Topic{},
+		flag:        map[string]struct{}{},
+		MaxWaitTime: maxWaitTime,
 	}
 	return l
 }
 
-func (l *DLock) defaultSubscribe() {
-	if l.Subscribe != nil {
-		return
+func (l *defaultSingleFlight) subscribe(key string) (Value, bool, error) {
+	ch := make(chan *notify, 1)
+	err := l.registerNotify(key, ch)
+	if err != nil {
+		return nil, false, err
 	}
-	subscribe := func(key string) (Value, error) {
-		ch := make(chan *notify, 1)
-		err := l.RegisterNotify(key, ch)
-		if err != nil {
-			return nil, err
-		}
-		res := <-ch
-		return res.value, res.err
-	}
-	l.Subscribe = subscribe
+	res := <-ch
+	return res.value, false, res.err
 }
 
 // RegisterObserver 必须提前定义好slow函数
-func (l *DLock) RegisterObserver(call OnCall, topic string) (*Topic, error) {
+func (l *defaultSingleFlight) registerTopic(call func()(Value,error), topic string) (*Topic, error) {
 	l.rw.Lock()
 	defer l.rw.Unlock()
 	if _, ok := l.obs[topic]; ok {
@@ -120,83 +115,77 @@ func (l *DLock) RegisterObserver(call OnCall, topic string) (*Topic, error) {
 }
 
 // RegisterNotify 注册异步通知的回调函数
-func (l *DLock) RegisterNotify(topic string, ch chan *notify) error {
+func (l *defaultSingleFlight) registerNotify(topic string, ch chan *notify) error {
 	l.rw.RLock()
 	defer l.rw.RUnlock()
 	ob, ok := l.obs[topic]
 	if !ok {
-		return ErrTopicAlreadyExist
+		// 如果两个请求拿锁，临界时间非常短，如果此时slow的注册topic时间耗时比较长
+		// 超过了注册notify的时间，那么很有可能没有拿到锁的请求到达这里，所以会导致
+		// 报错，这里处理方案是休眠10ms，等待对象创建成功，进行重试
+		time.Sleep(10 * time.Microsecond)
+		ob, ok = l.obs[topic]
+		if !ok {
+			return ErrTopicNotExist
+		}
 	}
 	ob.subscribe(ch)
 	return nil
 }
 
 // Notify
-func (l *DLock) Notify(topicName string, no *notify) {
+func (l *defaultSingleFlight) notify(topicName string, no *notify) {
 	l.rw.Lock()
 	defer l.rw.Unlock()
+	// 将这步操作从最后放在第一排
 	v, ok := l.obs[topicName]
 	if ok {
 		v.publish(no)
 	}
-	delete(l.flags, topicName)
 	delete(l.obs, topicName)
+	delete(l.flag,topicName)
 }
 
-// 创建锁进行建立请求 ,set topic if not exist
-func (l *DLock) setNx(topic string) bool {
+func (l *defaultSingleFlight)setNx(topicName string)  bool{
 	l.rw.Lock()
 	defer l.rw.Unlock()
-	if _, ok := l.flags[topic]; ok {
-		// 当锁存在的时候，则不能简单的删除
+	if _,ok :=l.flag[topicName];ok {
 		return false
-	} else {
-		// 当锁不存在的时候，
-		l.flags[topic] = struct{}{}
-		return true
 	}
+	l.flag[topicName] = struct{}{}
+	return true
 }
 
-// 调用这个的时候可以是本地缓存中没有这个内容了
-// if !exist {
-// 	 locker.Get(targetKey)
-// }
-func (l *DLock) Get(topicName string, items ...interface{}) (Value, error) {
-
-	if l.Subscribe == nil {
-		l.defaultSubscribe()
+func (l *defaultSingleFlight) Get(topicName string, slow func()(Value,error)) (Value, bool, error) {
+	if topicName == ""  || slow == nil{
+		return nil, false, ErrInValidParam
 	}
 
-	if topicName == "" {
-		return nil, ErrInValidParam
-	}
-	if len(items) <1  {
-		return nil, ErrInValidParam
-	}
-	Call, ok := items[0].(OnCall)
-	if !ok {
-		return nil, ErrBadConvertParamToCall
-	}
-
+	// 对标志位进行加锁操作，标志位设置成功，就进入slowWay 如果标志位设置失败就进入
+	// waitWay, 这里需要注意临界值的判断，所以对资源颗粒度相对较小，要求比较高
 	if l.setNx(topicName) {
-		// 设置锁成功，执行慢操作
-		slow, err := l.RegisterObserver(Call, topicName)
+		// 1 .创建topic ，此操作占用锁,占用排他锁进行Topic
+		// 创建，此时读请求、写请求都将被阻塞，知道此操作释放
+		slowWay, err := l.registerTopic(slow, topicName)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		v, err := slow.OnCall()
+
+		// 2 .执行慢操作,此操作不占用锁
+		v, err := slowWay.OnCall()
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		// 发布成功内容
 		niy := &notify{
 			value: v,
 			err:   err,
 		}
-		l.Notify(topicName, niy)
-		return v, err
+		// 3 .发布成功内容，此操作占用写锁
+		l.notify(topicName, niy)
+		return v, true, err
+
 	} else {
 		// 设置锁失败发起订阅
-		return l.Subscribe(topicName)
+		return l.subscribe(topicName)
 	}
 }
