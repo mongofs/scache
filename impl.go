@@ -14,6 +14,11 @@ var (
 	ErrNotifyNotExist           = errors.New("sCache : notify is not exist")
 	ErrTopicAlreadyExist        = errors.New("sCache : Topic  already exist")
 	ErrBadConvertParamToCall    = errors.New("sCache : Can't Convert Param item[0] to Call")
+
+	ErrRegulationAlreadyExist = errors.New("sCache : regulation already exist ")
+
+	ErrKeyAlreadyExist = errors.New("sCache : key already exist ")
+	ErrKeyNotExist     = errors.New("sCache : key is not  exist ")
 )
 
 type cacheImpl struct {
@@ -25,24 +30,25 @@ type cacheImpl struct {
 	cache    map[string]*list.Element
 
 	// 当某个key被删除的时候的回调函数
-	OnCaller func(key string, v Value)
-	locker *DLock
+	OnCaller      func(key string, v Value)
+	RegularManger RegularManger
 }
 
-func New(maxByte int64,interval time.Duration, OnCaller func(key string, value Value)) *cacheImpl {
+func New(maxByte int64, clearInterval time.Duration, OnCaller func(key string, value Value)) *cacheImpl {
 	c := &cacheImpl{
-		maxBytes: maxByte,
-		nBytes:   0,
-		ll:       list.New(),
-		interval: interval,
-		cache:    make(map[string]*list.Element),
-		OnCaller: OnCaller,
+		maxBytes:      maxByte,
+		nBytes:        0,
+		ll:            list.New(),
+		interval:      clearInterval,
+		cache:         make(map[string]*list.Element),
+		OnCaller:      OnCaller,
+		RegularManger: NewRegularManager(),
 	}
 	c.clearParallel()
 	return c
 }
 
-func (c *cacheImpl) Get(key string) (Value, bool) {
+func (c *cacheImpl) Get(key string) (Value, error) {
 	return c.get(key)
 }
 
@@ -51,6 +57,20 @@ func (c *cacheImpl) Set(key string, value Value) error {
 		return ErrInValidParam
 	}
 	return c.set(key, value)
+}
+
+func (c *cacheImpl) SetNX(key string, value Value) error {
+	if value == nil || key == "" {
+		return ErrInValidParam
+	}
+	return c.setNx(key, value)
+}
+
+func (c *cacheImpl) SetEX(key string, value Value) error {
+	if value == nil || key == "" {
+		return ErrInValidParam
+	}
+	return c.setNx(key, value)
 }
 
 func (c *cacheImpl) Del(key string) {
@@ -71,43 +91,33 @@ func (c *cacheImpl) SetWithTTL(key string, value Value, ttl int) error {
 	return c.setWithTTL(key, value, ttl)
 }
 
-// 调用这个方法是设置一个key值，这个key值一段时间后会过期，过期后单线程执行f方法
-func (c *cacheImpl) GetTargetWithSlowFunc(targetKey string, expire int, f func() (Value, error)) (Value, error) {
-	if targetKey == "" || f == nil {
-		return nil, ErrInValidParam
+func (c *cacheImpl) Register(regulation string, expire int, f func() (Value, error)) error {
+	if regulation == "" || f == nil {
+		return ErrInValidParam
 	}
-	v, ok := c.get(targetKey)
-	if ok {
-		return v, nil
-	} else {
-		Val, err := c.locker.Get(targetKey, f)
-		if err != nil {
-			return nil, err
-		}
-		err = c.setWithTTL(targetKey, Val, expire)
-		if err != nil {
-			return nil, err
-		}
-		return Val, err
-	}
+	return c.RegularManger.Register(regulation, expire, f)
 }
 
 // =============================================concurrency safe =========================================
 
 // get 并发安全，查询key 对应的value值，并在查询的时候进行值状态判断
-func (c *cacheImpl) get(key string) (Value, bool) {
-	c.rw.Lock()
-	defer c.rw.Unlock()
-	if ele, ok := c.getElem(key); ok {
-		if c.flushKey(ele) {
-			c.ll.MoveToFront(ele)
-			kv := ele.Value.(*sds)
-			return kv.Value, true
-		} else {
-			return nil, false
+func (c *cacheImpl) get(key string) (Value, error) {
+	if val, ok := c.beforeGet(key); ok {
+		return val, nil
+	}
+	// 如果key 不存在cache中， 去查询regulation查看是否存在key
+	val, shouldSave, err := c.RegularManger.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	if shouldSave {
+		c.rw.Lock()
+		defer c.rw.Unlock()
+		if err = c.unsafeSet(key, val, 0); err != nil {
+			return nil, err
 		}
 	}
-	return nil, false
+	return val, nil
 }
 
 // set 并发安全 ,设置一个值，需要考虑值存在的时候更新和值不存在的时候
@@ -115,36 +125,7 @@ func (c *cacheImpl) get(key string) (Value, bool) {
 func (c *cacheImpl) set(key string, value Value) (err error) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
-	if int64(value.Len()) > c.maxBytes {
-		return ErrValueIsBiggerThanMaxByte
-	}
-	if ele, ok := c.getElem(key); ok {
-		kv := ele.Value.(*sds)
-		// 可能key存在，但是被标记为已删除，此时只需要从新覆盖这个值
-		if kv.Status() == SDSStatusDelete {
-			kv.ReUse()
-			kv.expire = 0
-			kv.Value = value
-			c.nBytes += int64(kv.Calculation())
-		} else {
-			oldV := kv.Value
-			kv.Value = value
-			// todo 重新设置后将过期时间置零，有待考证
-			kv.expire = 0
-			c.nBytes += int64(oldV.Len() - value.Len())
-		}
-	} else {
-		// 创建新的sds结构体
-		newSds := NewSDS(key, value)
-		ele := c.ll.PushFront(newSds)
-		c.cache[key] = ele
-		c.nBytes += int64(newSds.Calculation())
-	}
-
-	for c.maxBytes != 0 && c.maxBytes < c.nBytes {
-		c.removeOldest()
-	}
-	return
+	return c.unsafeSet(key, value, 0)
 }
 
 // 设置一个值并携带ttl 的过期时间
@@ -192,7 +173,80 @@ func (c *cacheImpl) clearParallel() {
 	}()
 }
 
+func (c *cacheImpl) beforeGet(key string) (Value, bool) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	if ele, ok := c.getElem(key); ok {
+
+		// flushKey 在读取elem的时候判断key值过期了没有，这里会出现一个问题
+		// 如果某个值一直没被访问只能依靠lru进行淘汰，这里是需要改进的一个地方
+		// todo 设置一个阈值，超过这个阈值的时候主动开启扫描过期的值，并清除掉
+
+		if c.flushKey(ele) {
+			// 当key值存在的时候，需要将值的访问记录进行更新，
+			c.ll.MoveToFront(ele)
+			kv := ele.Value.(*sds)
+			return kv.Value, true
+		} else {
+			// 这里代表我们的key存在但是已经过期
+			return nil, false
+		}
+	}
+	return nil, false
+}
+
+func (c *cacheImpl) setNx(key string, value Value) error {
+	if _, ok := c.beforeGet(key); ok {
+		return ErrKeyAlreadyExist
+	}
+	c.rw.Lock()
+	defer c.rw.Unlock()
+	return c.unsafeSet(key, value, 0)
+}
+
+func (c *cacheImpl) setEx(key string, value Value) error {
+	if _, ok := c.beforeGet(key); !ok {
+		return ErrKeyNotExist
+	}
+	c.rw.Lock()
+	defer c.rw.Unlock()
+	return c.unsafeSet(key, value, 0)
+}
+
 //  =============================================concurrency not safe =========================================
+
+func (c *cacheImpl) unsafeSet(key string, value Value, expire int) error {
+	if int64(value.Len()) > c.maxBytes {
+		return ErrValueIsBiggerThanMaxByte
+	}
+	if ele, ok := c.getElem(key); ok {
+		// 如果说这个值存在，那么需要进行值的覆盖
+		kv := ele.Value.(*sds)
+		oldSt := kv.Status()
+		oldLen := kv.Value.Len()
+		kv.ReUse()
+		kv.expire = int64(expire)
+		kv.Value = value
+		if oldSt == SDSStatusDelete {
+			// 表示之前的内容被删除过了，新值直接增加长度即可
+			c.nBytes += int64(kv.Calculation())
+		} else {
+			// 如果之前的内容存在的话
+			c.nBytes += int64(oldLen - value.Len())
+		}
+	} else {
+		// 创建新的sds结构体
+		newSds := NewSDS(key, value, expire)
+		ele := c.ll.PushFront(newSds)
+		c.cache[key] = ele
+		c.nBytes += int64(newSds.Calculation())
+	}
+
+	for c.maxBytes != 0 && c.maxBytes < c.nBytes {
+		c.removeOldest()
+	}
+	return nil
+}
 
 // removeOldest 移除最老的内容
 func (c *cacheImpl) removeOldest() {

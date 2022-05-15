@@ -13,7 +13,10 @@
 
 package Scache
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // sds is a short of simple dynamic string
 
@@ -41,8 +44,11 @@ type sds struct {
 	Value Value
 }
 
-func NewSDS(key string, value Value) *sds {
+func NewSDS(key string, value Value, expire int) *sds {
 	sd := sdsPool.Get().(*sds)
+	if expire > 0 {
+		sd.expire = time.Now().Unix() + int64(expire)
+	}
 	sd.key = key
 	sd.Value = value
 	return sd
