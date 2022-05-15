@@ -20,12 +20,12 @@ import (
 	"unsafe"
 )
 
-func  TestSds_Calculation(t *testing.T) {
-	Convey("test sds size ",t, func() {
+func TestSds_Calculation(t *testing.T) {
+	Convey("test sds size ", t, func() {
 		s := &sds{
-			key:    "123", // 16字节
-			expire: 123241, // 8字节
-			st:     1, // 1个字节
+			key:    "123",                     // 16字节
+			expire: 123241,                    // 8字节
+			st:     1,                         // 1个字节
 			Value:  defaultStringValue("you"), // 16字节
 		}
 		// key :
@@ -37,6 +37,6 @@ func  TestSds_Calculation(t *testing.T) {
 		fmt.Println(unsafe.Sizeof(s.expire))
 		fmt.Println(unsafe.Sizeof(s.st))
 		fmt.Println(len("abc"))
-		fmt.Println(unsafe.Sizeof([]string{"1","2"}))
+		fmt.Println(unsafe.Sizeof([]string{"1", "2"}))
 	})
 }

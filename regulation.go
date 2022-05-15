@@ -24,31 +24,29 @@ type regular struct {
 	expire int
 }
 
-
 type RegularManger interface {
-	Register(regulation string, expire int, call RegulationCall)error
-	Get(regulation string) (Value ,bool,error)
+	Register(regulation string, expire int, call RegulationCall) error
+	Get(regulation string) (Value, bool, error)
 }
 
-
 type defaultRegularManger struct {
-	rw     *sync.RWMutex
-	set    map[string]*regular
+	rw           *sync.RWMutex
+	set          map[string]*regular
 	singleFlight SingleFlight
 }
 
-func NewRegularManager ()RegularManger{
+func NewRegularManager() RegularManger {
 	return &defaultRegularManger{
-		rw:     &sync.RWMutex{},
-		set: map[string]*regular{},
+		rw:           &sync.RWMutex{},
+		set:          map[string]*regular{},
 		singleFlight: NewSingleFlight(20),
 	}
 }
 
-func (r *defaultRegularManger) Register(regulation string, expire int, call RegulationCall)error {
+func (r *defaultRegularManger) Register(regulation string, expire int, call RegulationCall) error {
 	r.rw.Lock()
 	defer r.rw.Unlock()
-	if _,ok := r.set[regulation];ok {
+	if _, ok := r.set[regulation]; ok {
 		return ErrRegulationAlreadyExist
 	}
 	r.set[regulation] = &regular{
@@ -58,12 +56,12 @@ func (r *defaultRegularManger) Register(regulation string, expire int, call Regu
 	return nil
 }
 
-func (r *defaultRegularManger) Get(regulation string) (Value,bool, error) {
+func (r *defaultRegularManger) Get(regulation string) (Value, bool, error) {
 	r.rw.RLock()
 	v, ok := r.set[regulation]
 	r.rw.RUnlock()
 	if ok {
-		return r.singleFlight.Get(regulation,v.call)
+		return r.singleFlight.Get(regulation, v.call)
 	}
-	return nil,false,nil
+	return nil, false, nil
 }

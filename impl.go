@@ -17,8 +17,8 @@ var (
 
 	ErrRegulationAlreadyExist = errors.New("sCache : regulation already exist ")
 
-	ErrKeyAlreadyExist =errors.New("sCache : key already exist ")
-	ErrKeyNotExist =errors.New("sCache : key is not  exist ")
+	ErrKeyAlreadyExist = errors.New("sCache : key already exist ")
+	ErrKeyNotExist     = errors.New("sCache : key is not  exist ")
 )
 
 type cacheImpl struct {
@@ -34,17 +34,14 @@ type cacheImpl struct {
 	RegularManger RegularManger
 }
 
-
-
-
 func New(maxByte int64, clearInterval time.Duration, OnCaller func(key string, value Value)) *cacheImpl {
 	c := &cacheImpl{
-		maxBytes: maxByte,
-		nBytes:   0,
-		ll:       list.New(),
-		interval: clearInterval,
-		cache:    make(map[string]*list.Element),
-		OnCaller: OnCaller,
+		maxBytes:      maxByte,
+		nBytes:        0,
+		ll:            list.New(),
+		interval:      clearInterval,
+		cache:         make(map[string]*list.Element),
+		OnCaller:      OnCaller,
 		RegularManger: NewRegularManager(),
 	}
 	c.clearParallel()
@@ -66,14 +63,14 @@ func (c *cacheImpl) SetNX(key string, value Value) error {
 	if value == nil || key == "" {
 		return ErrInValidParam
 	}
-	return c.setNx(key,value)
+	return c.setNx(key, value)
 }
 
 func (c *cacheImpl) SetEX(key string, value Value) error {
 	if value == nil || key == "" {
 		return ErrInValidParam
 	}
-	return c.setNx(key,value)
+	return c.setNx(key, value)
 }
 
 func (c *cacheImpl) Del(key string) {
@@ -198,23 +195,22 @@ func (c *cacheImpl) beforeGet(key string) (Value, bool) {
 	return nil, false
 }
 
-func  (c * cacheImpl)setNx (key string,value Value)  error{
-	if _,ok := c.beforeGet(key);ok {
+func (c *cacheImpl) setNx(key string, value Value) error {
+	if _, ok := c.beforeGet(key); ok {
 		return ErrKeyAlreadyExist
 	}
 	c.rw.Lock()
 	defer c.rw.Unlock()
-	return c.unsafeSet(key,value,0)
+	return c.unsafeSet(key, value, 0)
 }
 
-
-func (c *cacheImpl) setEx (key string ,value Value)error {
-	if _,ok := c.beforeGet(key);!ok {
+func (c *cacheImpl) setEx(key string, value Value) error {
+	if _, ok := c.beforeGet(key); !ok {
 		return ErrKeyNotExist
 	}
 	c.rw.Lock()
 	defer c.rw.Unlock()
-	return c.unsafeSet(key,value,0)
+	return c.unsafeSet(key, value, 0)
 }
 
 //  =============================================concurrency not safe =========================================

@@ -15,25 +15,38 @@ package Scache
 
 import (
 	"fmt"
+	"go.uber.org/atomic"
+	"math/rand"
 	"testing"
 	"time"
 )
 
-// 这里为singleFlight 进行压力测试
+var benchCall = func() (Value, error) {
+	fmt.Println("走到这里来了")
+	time.Sleep(1 * time.Second)
+	return defaultStringValue("steven"), nil
+}
 
-func  BenchmarkDefaultSingleFlight_Get(b *testing.B) {
-	ca := New(500,30*time.Second, func(key string, value Value) {
-		fmt.Println(key,value)
-	})
-	ca.Register("test",5, func() (Value, error) {
-		fmt.Println("进入了慢方法")
-		return defaultStringValue("steven"),nil
-	})
-
-	for i := 0;i < b.N;i ++ {
-		_ ,err := ca.Get("test")
-		if err !=nil {
-			b.Fatal(err)
-		}
+// goos: darwin
+// goarch: amd64
+// pkg: Scache
+// cpu: Intel(R) Core(TM) i5-8500B CPU @ 3.00GHz
+// BenchmarkDefaultSingleFlight_Get
+// BenchmarkDefaultSingleFlight_Get-6   	  503554	      2070 ns/op
+func BenchmarkDefaultSingleFlight_Get(b *testing.B) {
+	ob := NewSingleFlight(10)
+	in := atomic.Int32{}
+	for i := 0; i < b.N; i++ {
+		// 模拟100个请求，这些请求开始时间不一定，在10秒内的均匀分布，理想状况是每秒10个请求
+		// 后台请求耗时在1秒左右，那么此时预计慢请求应该在10个以下，总请求数不变，
+		go func() {
+			in.Inc()
+			time.Sleep(time.Duration(rand.Intn(10)) * time.Second)
+			_, _, err := ob.Get("10", benchCall)
+			if err != nil {
+				b.Fatal(err)
+				return
+			}
+		}()
 	}
 }

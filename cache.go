@@ -22,10 +22,10 @@ type Cache interface {
 	Set(key string, value Value) error
 
 	// 防止覆盖，建议内存中优先使用这个函数，防止key值之间的覆盖
-	SetNX(key string,value Value) error
+	SetNX(key string, value Value) error
 
 	// 覆盖已经存在的某个key，如果key不存在，就返回，否则就覆盖
-	SetEX(key string,value Value) error
+	SetEX(key string, value Value) error
 
 	// 设置一个值，并为这个值设置一个过期时间
 	SetWithTTL(key string, content Value, ttl int) error
@@ -37,6 +37,5 @@ type Cache interface {
 	Expire(key string, ttl int)
 
 	// 提前将规则注册到cache中，regulation 之间是不能覆盖，否则就会报错
-	Register(regulation string,expire int, f func() (Value, error)) error
+	Register(regulation string, expire int, f func() (Value, error)) error
 }
-

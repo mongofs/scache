@@ -34,7 +34,7 @@ func TestCacheImpl_Set(t *testing.T) {
 			give := []string{"ky1", "ky2", "ky3"}
 			for k, v := range give {
 				res, err := ca.Get(v)
-				if err !=nil  {
+				if err != nil {
 					t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", v, expect[k])
 				}
 				So(string(res.(defaultStringValue)), ShouldEqual, expect[k])
@@ -44,7 +44,7 @@ func TestCacheImpl_Set(t *testing.T) {
 		Convey("test for set value repeat ", func() {
 			ca.Set(k1, defaultStringValue("cccc"))
 			res, err := ca.Get(k1)
-			if err !=nil  {
+			if err != nil {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", k1, "cccc")
 			}
 			So(string(res.(defaultStringValue)), ShouldEqual, "cccc")
@@ -77,7 +77,7 @@ func TestCacheImpl_Get(t *testing.T) {
 		ca.Set("key3", defaultStringValue("im good man2"))
 		Convey("test get key witch existed ", func() {
 			res, err := ca.Get("key1")
-			if err !=nil  {
+			if err != nil {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", "key1", "im good man")
 			}
 			So(string(res.(defaultStringValue)), ShouldEqual, "im good man")
@@ -117,11 +117,10 @@ func TestCacheImpl_Expire(t *testing.T) {
 		cache.Expire("userA", 5)
 		v, ok := cache.Get("userA")
 		So(ok, ShouldBeTrue)
-		So(cache.nBytes,ShouldEqual,v.Len()+len("userA"))
+		So(cache.nBytes, ShouldEqual, v.Len()+len("userA"))
 		time.Sleep(6 * time.Second)
 		_, ok1 := cache.Get("userA")
 		So(ok1, ShouldBeFalse)
 		So(cache.nBytes, ShouldEqual, 0)
 	})
 }
-

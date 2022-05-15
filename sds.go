@@ -44,9 +44,9 @@ type sds struct {
 	Value Value
 }
 
-func NewSDS(key string, value Value,expire int) *sds {
+func NewSDS(key string, value Value, expire int) *sds {
 	sd := sdsPool.Get().(*sds)
-	if expire >0 {
+	if expire > 0 {
 		sd.expire = time.Now().Unix() + int64(expire)
 	}
 	sd.key = key
