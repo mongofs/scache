@@ -34,14 +34,14 @@ type cacheImpl struct {
 	RegularManger RegularManger
 }
 
-func New(maxByte int64, clearInterval time.Duration, OnCaller func(key string, value Value)) *cacheImpl {
+func New(maxByte int64, clearInterval time.Duration, clearCall func(key string, value Value)) *cacheImpl {
 	c := &cacheImpl{
 		maxBytes:      maxByte,
 		nBytes:        0,
 		ll:            list.New(),
 		interval:      clearInterval,
 		cache:         make(map[string]*list.Element),
-		OnCaller:      OnCaller,
+		OnCaller:      clearCall,
 		RegularManger: NewRegularManager(),
 	}
 	c.clearParallel()
@@ -106,14 +106,14 @@ func (c *cacheImpl) get(key string) (Value, error) {
 		return val, nil
 	}
 	// 如果key 不存在cache中， 去查询regulation查看是否存在key
-	val, shouldSave, err := c.RegularManger.Get(key)
+	val, shouldSave,expire, err := c.RegularManger.Get(key)
 	if err != nil {
 		return nil, err
 	}
 	if shouldSave {
 		c.rw.Lock()
 		defer c.rw.Unlock()
-		if err = c.unsafeSet(key, val, 0); err != nil {
+		if err = c.unsafeSet(key, val, expire); err != nil {
 			return nil, err
 		}
 	}
