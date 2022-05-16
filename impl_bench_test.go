@@ -35,10 +35,12 @@ func BenchmarkCacheImpl_GetKeyWitchRegistered(b *testing.B) {
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v,err := ca.Get(testKey)
-		if err != nil {
-			b.Fatal()
-		}
-		fmt.Println(v)
+		go func() {
+			v,err := ca.Get(testKey)
+			if err != nil {
+				b.Fatal()
+			}
+			fmt.Println(v)
+		}()
 	}
 }

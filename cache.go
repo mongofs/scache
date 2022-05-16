@@ -30,12 +30,13 @@ type Cache interface {
 	// 设置一个值，并为这个值设置一个过期时间
 	SetWithTTL(key string, content Value, ttl int) error
 
-	// 删除一个key值
+	// 删除一个key值，并未真正删除，只是将key值进行标注为不可访问，get获取是获取不到的，但是
+	// 会回调删除方法，真正删除的时候是在内存占用超过80% 的时候
 	Del(key string)
 
 	// 过期某个值
 	Expire(key string, ttl int)
 
 	// 提前将规则注册到cache中，regulation 之间是不能覆盖，否则就会报错
-	Register(regulation string, expire int, f func() (Value, error)) error
+	Register(regulation string, expire int, f /* slow way func */ func() (Value, error)) error
 }

@@ -61,8 +61,17 @@ func (s *sds) Delete() {
 	s.st = SDSStatusDelete
 }
 
+func (s *sds) Destroy() {
+	s.key = ""
+	s.expire = 0
+	s.st = SDSStatusNormal
+	s.Value = nil
+
+	sdsPool.Put(s)
+}
+
 func (s *sds) ReUse() {
-	s.st = SDSStatusDelete
+	s.st = SDSStatusNormal
 }
 
 //Calculation  这里 计算只计算sds的key值 + value值的大小
@@ -74,16 +83,23 @@ type Value interface {
 	Len() int
 }
 
-// ==========================================defaultValue String========================================
-type defaultStringValue string
+// ==========================================defaultValue byte========================================
 
-func (d defaultStringValue) Len() int {
+type ByteValue []byte
+
+func (d ByteValue) Len() int {
 	return len(d)
 }
 
-// ==========================================defaultValue String========================================
-type defaultIntValue int
-
-func (d defaultIntValue) Len() int {
-	return int(d)
+func (d ByteValue) Value() []byte {
+	return d
 }
+
+// ==========================================defaultValue String========================================
+
+type StringValue string
+
+func (d StringValue) Len() int {
+	return len(d)
+}
+
