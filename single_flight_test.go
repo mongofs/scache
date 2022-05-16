@@ -26,7 +26,7 @@ var mockerCaller = func() (Value, error) {
 	incr.Inc()
 	time.Sleep(2 * time.Second)
 	// select * from list
-	return defaultStringValue("steven "), nil
+	return StringValue("steven "), nil
 }
 
 var incr atomic.Int32
@@ -60,7 +60,7 @@ var qukCaller = func() (Value, error) {
 		fmt.Println("出去了注册函数找中")
 	}()
 	time.Sleep(1 * time.Second)
-	return defaultStringValue("steven "), nil
+	return StringValue("steven "), nil
 }
 
 func TestDefaultSingleFlight_GetWithManyReq(t *testing.T) {
@@ -91,7 +91,7 @@ var timeOutCaller = func() (Value, error) {
 	incr.Inc()
 	time.Sleep(3 * time.Second)
 	// select * from list
-	return defaultStringValue("steven "), nil
+	return StringValue("steven "), nil
 }
 
 func TestDefaultSingleFlight_GetTimeOut(t *testing.T) {

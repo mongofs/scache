@@ -24,7 +24,7 @@ import (
 var benchCall = func() (Value, error) {
 	fmt.Println("走到这里来了")
 	time.Sleep(1 * time.Second)
-	return defaultStringValue("steven"), nil
+	return StringValue("steven"), nil
 }
 
 // goos: darwin
