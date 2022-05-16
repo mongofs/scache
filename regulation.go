@@ -22,7 +22,7 @@ type regular struct {
 }
 
 type RegularManger interface {
-	Register(regulation string, expire int, call func() (Value, error)) error
+	Register(regulation string, expire int, call func() (Value, error))
 
 	// 第二个参数理解起来有点困难，因为RegularManager 是并发安全的，所以同一时间打入Get方法
 	// 的流量势必会非常多，假设100个流量都进入了Get，在上层调用的时候不应该将所有的请求拿到的
@@ -44,17 +44,16 @@ func NewRegularManager() RegularManger {
 	}
 }
 
-func (r *defaultRegularManger) Register(regulation string, expire int, call func() (Value, error)) error {
+func (r *defaultRegularManger) Register(regulation string, expire int, call func() (Value, error))  {
 	r.rw.Lock()
 	defer r.rw.Unlock()
 	if _, ok := r.set[regulation]; ok {
-		return ErrRegulationAlreadyExist
+		panic( ErrRegulationAlreadyExist)
 	}
 	r.set[regulation] = &regular{
 		call:   call,
 		expire: expire,
 	}
-	return nil
 }
 
 func (r *defaultRegularManger) Get(regulation string) (Value, bool,int , error) {

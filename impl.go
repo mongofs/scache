@@ -91,11 +91,11 @@ func (c *cacheImpl) SetWithTTL(key string, value Value, ttl int) error {
 	return c.set(key,value,ttl)
 }
 
-func (c *cacheImpl) Register(regulation string, expire int, f /* slow way func */func() (Value, error)) error {
-	if regulation == "" || f == nil {
-		return ErrInValidParam
+func (c *cacheImpl) Register(regulation string, expire int, f /* slow way func */func() (Value, error))  {
+	if regulation == "" || f == nil  || expire < 0{
+		panic( ErrInValidParam)
 	}
-	return c.regularManger.Register(regulation, expire, f)
+	c.regularManger.Register(regulation, expire, f)
 }
 
 // =============================================concurrency safe =========================================
