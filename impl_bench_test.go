@@ -31,7 +31,7 @@ func BenchmarkCacheImpl_GetKeyWitchRegistered(b *testing.B) {
 	ca.Register(testKey,3, func() (Value, error) {
 		counter.Inc()
 		time.Sleep(1 * time.Second)
-		return defaultStringValue("steven is gooo guy"),nil
+		return StringValue("steven is gooo guy"),nil
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
