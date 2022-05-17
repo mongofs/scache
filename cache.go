@@ -38,5 +38,5 @@ type Cache interface {
 	Expire(key string, ttl int)
 
 	// 提前将规则注册到cache中，regulation 之间是不能覆盖，否则就会报错
-	Register(regulation string, expire int, f /* slow way func */ func() (Value, error)) error
+	Register(regulation string, expire int, f /* slow way func */ func() (Value, error))
 }

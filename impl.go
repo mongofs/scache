@@ -56,7 +56,7 @@ func (c *cacheImpl) Set(key string, value Value) error {
 	if value == nil || key == "" {
 		return ErrInValidParam
 	}
-	return c.set(key, value,0)
+	return c.set(key, value, 0)
 }
 
 func (c *cacheImpl) SetNX(key string, value Value) error {
@@ -88,14 +88,14 @@ func (c *cacheImpl) SetWithTTL(key string, value Value, ttl int) error {
 	if value == nil || key == "" {
 		return ErrInValidParam
 	}
-	return c.set(key,value,ttl)
+	return c.set(key, value, ttl)
 }
 
-func (c *cacheImpl) Register(regulation string, expire int, f /* slow way func */func() (Value, error)) error {
-	if regulation == "" || f == nil {
-		return ErrInValidParam
+func (c *cacheImpl) Register(regulation string, expire int, f /* slow way func */ func() (Value, error)) {
+	if regulation == "" || f == nil || expire < 0 {
+		panic(ErrInValidParam)
 	}
-	return c.regularManger.Register(regulation, expire, f)
+	c.regularManger.Register(regulation, expire, f)
 }
 
 // =============================================concurrency safe =========================================
@@ -131,7 +131,7 @@ func (c *cacheImpl) set(key string, value Value, expire int) error {
 		kv.ReUse()
 		if expire > 0 {
 			kv.expire = int64(expire) + time.Now().Unix()
-		}else {
+		} else {
 			kv.expire = 0
 		}
 		kv.Value = value
@@ -144,8 +144,13 @@ func (c *cacheImpl) set(key string, value Value, expire int) error {
 		c.nBytes += int64(newSds.Calculation())
 	}
 
+	var freeBytes, freeElems int64
 	for c.maxBytes != 0 && c.maxBytes < c.nBytes {
-		c.removeOldest()
+		freeBytes += c.removeOldest()
+		freeElems++
+	}
+	if freeBytes != 0 {
+		fmt.Printf(" sCache : Garbage.Collection.removeOldest， free bytes  %v ,free Element %v \n\r", freeBytes, freeElems)
 	}
 	return nil
 }
@@ -158,7 +163,7 @@ func (c *cacheImpl) del(key string, del bool) {
 		return
 	}
 
-	if v,ok :=c.getElem(key);ok {
+	if v, ok := c.getElem(key); ok {
 		s := v.Value.(*sds)
 		c.fakeDel(s)
 	}
@@ -179,9 +184,9 @@ func (c *cacheImpl) clear() {
 		for {
 			time.Sleep(c.interval)
 			sin := time.Now()
-			counter ,free := c.RealDel()
+			counter, free := c.RealDel()
 			escape := time.Since(sin)
-			if counter >0 {
+			if counter > 0 {
 				fmt.Printf("sCache : clear once spend %v , clear %v element ,clear memory %v byte   \n\r", escape, counter, free)
 			}
 		}
@@ -200,7 +205,7 @@ func (c *cacheImpl) getDetection(key string) (Value, bool) {
 		s := ele.Value.(*sds)
 		// 1. 这个key 标记为被删除,如果被标记删除了直接返回
 		if s.Status() == SDSStatusDelete {
-			return nil,false
+			return nil, false
 		}
 		// 2.查看是否过期，如果过期了，将key标注一下更新为过期
 		if s.expire != 0 && s.expire < time.Now().Unix() {
@@ -210,7 +215,7 @@ func (c *cacheImpl) getDetection(key string) (Value, bool) {
 			// 内部内存是对用户不可见的，所以不需要告诉用户
 
 			c.fakeDel(s)
-			return nil,false
+			return nil, false
 		}
 
 		// 当key值存在的时候，需要将值的访问记录进行更新，
@@ -237,10 +242,15 @@ func (c *cacheImpl) setEx(key string, value Value) error {
 }
 
 // realDel For testing ,请勿直接调用 真删除，将标记出来的内容删除, 这是一个On操作，需要在后台线程上进行操作
-// 这个并非暴露的接口
-func (c *cacheImpl) RealDel() (int,int) {
+// 删除，是一个On操作，需要判断所有element 的内容是否为delete
+// 1. 需要将内容删除
+// 2. 需要释放空间
+// 3. 将元素释放
+// todo 待优化
+func (c *cacheImpl) RealDel() (int, int) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
+	fmt.Printf("sCache : RealDel current element counter %v ,current size %v  ,max cap %v \n\r", len(c.cache), c.nBytes, c.maxBytes)
 	counter := 0
 	free := 0
 	for k, v := range c.cache {
@@ -248,6 +258,7 @@ func (c *cacheImpl) RealDel() (int,int) {
 		sd := tev.Value.(*sds)
 		st := sd.Status()
 		if st == SDSStatusDelete {
+			c.ll.Remove(v)
 			counter++
 			delete(c.cache, k)
 			freeCount := sd.Calculation()
@@ -255,24 +266,32 @@ func (c *cacheImpl) RealDel() (int,int) {
 			free += freeCount
 			sd.Destroy()
 		}
+
+		if sd.expire < time.Now().Unix() && st == SDSStatusNormal{
+			sd.Delete()
+		}
 	}
-	return counter,free
+	return counter, free
 }
 
 //  =============================================concurrency not safe =========================================
 
-// removeOldest 移除最老的内容
-func (c *cacheImpl) removeOldest() {
+// removeOldest 直接真删除，
+// todo 之前的版本存在一个问题，realDeal后，实际上没有删除掉链表节点
+func (c *cacheImpl) removeOldest() (freeByte int64) {
 	ele := c.ll.Back()
 	if ele != nil {
+		// 删除 链表节点
 		c.ll.Remove(ele)
 		kv := ele.Value.(*sds)
 		delete(c.cache, kv.key)
-		c.nBytes -= int64(len(kv.key)) + int64(kv.Value.Len())
+		freeByte = int64(kv.Calculation())
+		c.nBytes -= freeByte
 		if c.OnCaller != nil {
 			c.OnCaller(kv.key, kv.Value)
 		}
 	}
+	return
 }
 
 // getElem 并发不安全，需要加锁操作
@@ -286,9 +305,7 @@ func (c *cacheImpl) getElem(key string) (*list.Element, bool) {
 // fakeDel 假删除，将内容标记为删除
 func (c *cacheImpl) fakeDel(sd *sds) {
 	sd.Delete()
-	if c.OnCaller !=nil {
-		c.OnCaller(sd.key,sd.Value)
+	if c.OnCaller != nil {
+		c.OnCaller(sd.key, sd.Value)
 	}
 }
-
-

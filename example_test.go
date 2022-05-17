@@ -11,36 +11,31 @@
  * limitations under the License.
  */
 
-package Scache
+package Scache_test
 
 import (
+	"Scache"
 	"fmt"
-	"go.uber.org/atomic"
-	"testing"
 	"time"
 )
 
-
-func BenchmarkCacheImpl_GetKeyWitchRegistered(b *testing.B) {
-	ca := New(5000,time.Duration( 10)*time.Second, func(key string, value Value) {
-		fmt.Println("删除 key",key,value)
+func ExampleCacheImpl_Register() {
+	cache := Scache.New(200 * 1204 * 1024 , 3* time.Second,func(key string, value Scache.Value) {
+		fmt.Println("delete the ",key ,value)
 	})
-	var testKey = "steven"
-	var counter = atomic.Int32{}
 
-	ca.Register(testKey,3, func() (Value, error) {
-		counter.Inc()
-		time.Sleep(1 * time.Second)
-		return StringValue("steven is gooo guy"),nil
+	cache.Register("testKey",0, func() (Scache.Value, error) {
+		// do select db or some action slow
+		time.Sleep(2 *time.Second)
+
+		// store [] byte value
+		return Scache.ByteValue("steven is handsome"),nil
 	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go func() {
-			v,err := ca.Get(testKey)
-			if err != nil {
-				b.Fatal()
-			}
-			fmt.Println(v)
-		}()
+
+	if val ,err := cache.Get("testKey");err !=nil {
+		panic(err)
+	}else  {
+		fmt .Println(string(val.(Scache.ByteValue).Value()))
 	}
+	// output : "steven is handsome"
 }

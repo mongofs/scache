@@ -26,7 +26,7 @@ func TestSds_Calculation(t *testing.T) {
 			key:    "123",                     // 16字节
 			expire: 123241,                    // 8字节
 			st:     1,                         // 1个字节
-			Value:  defaultStringValue("you"), // 16字节
+			Value:  StringValue("you"), // 16字节
 		}
 		// key :
 		// expire : int64 8字节
