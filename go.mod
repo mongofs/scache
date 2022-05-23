@@ -1,4 +1,4 @@
-module Scache
+module github.com/mongofs/Scache
 
 go 1.18
 
