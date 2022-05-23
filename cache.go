@@ -39,4 +39,7 @@ type Cache interface {
 
 	// 提前将规则注册到cache中，regulation 之间是不能覆盖，否则就会报错
 	Register(regulation string, expire int, f /* slow way func */ func() (Value, error))
+
+	// 注册一个CornJob
+	RegisterCron(regulation string,flushInterval int ,f /* slow way func */ func() (Value, error))
 }

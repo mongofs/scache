@@ -31,6 +31,7 @@ type cacheImpl struct {
 
 	// 当某个key被删除的时候的回调函数
 	OnCaller      func(key string, v Value)
+	OnError 	func(error)
 	regularManger RegularManger
 }
 
@@ -98,10 +99,39 @@ func (c *cacheImpl) Register(regulation string, expire int, f /* slow way func *
 	c.regularManger.Register(regulation, expire, f)
 }
 
+
+
+func (c *cacheImpl) RegisterCron(regulation string,flushInterval int ,f /* slow way func */ func() (Value, error)) {
+	if regulation == "" || f == nil || flushInterval < 0 {
+		panic(ErrInValidParam)
+	}
+	c.ticker(regulation,flushInterval,f)
+}
 // =============================================concurrency safe =========================================
 
-// get 并发安全，查询key 对应的value值，并在查询的时候进行值状态判断
+
+func (c * cacheImpl) ticker (regulation string, flushInterval int ,f /* slow way func */ func() (Value, error))error{
+	if flushInterval <=0 || regulation==""{return ErrInValidParam}
+	val,_,_,err :=c.regularManger.Get(regulation)
+	if err !=nil {return err}
+	if val !=nil {return ErrKeyAlreadyExist}
+	t := time.NewTicker(time.Duration(flushInterval)*time.Second)
+	go func() {
+		<- t.C
+		val ,err := f()
+		if err !=nil {
+			if c.OnError!=nil {
+				c.OnError(err)
+			}
+			c.set(regulation,val,0)
+		}
+	}()
+	return nil
+}
+
+
 func (c *cacheImpl) get(key string) (Value, error) {
+	// 去获取值是否存在于map中且状态不为过期状态
 	if val, ok := c.getDetection(key); ok {
 		return val, nil
 	}
@@ -118,6 +148,9 @@ func (c *cacheImpl) get(key string) (Value, error) {
 	return val, nil
 }
 
+// expire 拥有两个值0 ，大于0
+// 1. 当值为0 的时候表示用不过期
+// 2. 当值为大于0的时候表示，过期时间表示： time_now + expire
 func (c *cacheImpl) set(key string, value Value, expire int) error {
 	c.rw.Lock()
 	defer c.rw.Unlock()
@@ -125,7 +158,9 @@ func (c *cacheImpl) set(key string, value Value, expire int) error {
 		return ErrValueIsBiggerThanMaxByte
 	}
 	if ele, ok := c.getElem(key); ok {
-		// 如果说这个值存在，那么需要进行值的覆盖
+		// 如果说这个值存在于Element，有两种情况：
+		// 1. 这个值存在 ，但是已经过期
+		// 2. 这个值正常
 		kv := ele.Value.(*sds)
 		oldLen := kv.Value.Len()
 		kv.ReUse()

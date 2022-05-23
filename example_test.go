@@ -14,8 +14,8 @@
 package Scache_test
 
 import (
-	"github.com/mongofs/Scache"
 	"fmt"
+	"github.com/mongofs/Scache"
 	"time"
 )
 

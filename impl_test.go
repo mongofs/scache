@@ -23,11 +23,11 @@ import (
 
 func TestCacheImpl_Set(t *testing.T) {
 	var k1, k2, k3 string = "ky1", "ky2", "ky3"
-	var v1, v2, v3 StringValue = "hah", "ddd", "ccc"
+	var v1, v2, v3  = "hah", "ddd", "ccc"
 	ca := New(50, 10*time.Second, nil)
-	ca.Set(k1, v1)
-	ca.Set(k2, v2)
-	ca.Set(k3, v3)
+	ca.Set(k1, StringValue(v1))
+	ca.Set(k2, StringValue(v2))
+	ca.Set(k3, StringValue(v3))
 	Convey("test set value ", t, func() {
 		Convey("test for get key from cache ", func() {
 			expect := []string{"hah", "ddd", "ccc"}
@@ -37,7 +37,7 @@ func TestCacheImpl_Set(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", v, expect[k])
 				}
-				So(string(res.(StringValue)), ShouldEqual, expect[k])
+				So(res.(*DefaultStringValue).Value(), ShouldEqual, expect[k])
 			}
 		})
 
@@ -47,7 +47,7 @@ func TestCacheImpl_Set(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", k1, "cccc")
 			}
-			So(string(res.(StringValue)), ShouldEqual, "cccc")
+			So(res.(*DefaultStringValue).Value(), ShouldEqual, "cccc")
 		})
 
 		Convey("test for set nil value ", func() {
@@ -84,7 +84,7 @@ func TestCacheImpl_Get(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Call Set func failed, give %v , expect %v,but get nil  ", "key1", "im good man")
 			}
-			So(string(res.(StringValue)), ShouldEqual, "im good man")
+			So(res.(*DefaultStringValue).Value(), ShouldEqual, "im good man")
 		})
 		Convey("test get a not exist key  ", func() {
 			val, err := ca.Get("key4")
@@ -146,6 +146,31 @@ func TestCacheImpl_Register(t *testing.T) {
 			fmt.Println("delete the ", key, value)
 		})
 		cache.Register("testKey", 3, func() (Value, error) {
+			in.Inc()
+			return StringValue("steven"), nil
+		})
+
+		Convey("实际请求次数应该小于4次 ", func() {
+			// 进行查询
+			for i := 0; i < 10; i++ {
+				_,err :=cache.Get("testKey")
+				if err !=nil {
+					t.Fatal(err)
+				}
+				time.Sleep(1 * time.Second)
+			}
+			So(in.Load(),ShouldBeLessThanOrEqualTo,4)
+		})
+	})
+}
+
+func TestCacheImpl_RegisterCron(t *testing.T) {
+	Convey("测试注册定时器 ", t, func() {
+		var in atomic.Int32
+		cache := New(200*1204*1024, 10*time.Second, func(key string, value Value) {
+			fmt.Println("delete the ", key, value)
+		})
+		cache.RegisterCron("testKey", 3, func() (Value, error) {
 			in.Inc()
 			return StringValue("steven"), nil
 		})
