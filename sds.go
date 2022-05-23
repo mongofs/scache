@@ -85,21 +85,31 @@ type Value interface {
 
 // ==========================================defaultValue byte========================================
 
-type ByteValue []byte
+type byteValue []byte
 
-func (d ByteValue) Len() int {
+func ByteValue(cot []byte)  Value{
+	var tt byteValue = cot
+	return tt
+}
+
+func (d byteValue) Len() int {
 	return len(d)
 }
 
-func (d ByteValue) Value() []byte {
+func (d byteValue) Value() []byte {
 	return d
 }
 
 // ==========================================defaultValue String========================================
 
-type StringValue string
+type stringValue string
 
-func (d StringValue) Len() int {
+func StringValue(cot string) Value{
+	var tt stringValue = stringValue(cot)
+	return tt
+}
+
+func (d stringValue) Len() int {
 	return len(d)
 }
 
