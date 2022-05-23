@@ -14,7 +14,7 @@
 package Scache_test
 
 import (
-	"Scache"
+	"github.com/mongofs/Scache"
 	"fmt"
 	"time"
 )
@@ -29,13 +29,13 @@ func ExampleCacheImpl_Register() {
 		time.Sleep(2 *time.Second)
 
 		// store [] byte value
-		return Scache.ByteValue("steven is handsome"),nil
+		return Scache.ByteValue([]byte("steven is handsome")),nil
 	})
 
 	if val ,err := cache.Get("testKey");err !=nil {
 		panic(err)
 	}else  {
-		fmt .Println(string(val.(Scache.ByteValue).Value()))
+		fmt .Println(string(val.(*Scache.DefaultByteValue).Value()))
 	}
 	// output : "steven is handsome"
 }

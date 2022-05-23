@@ -85,31 +85,36 @@ type Value interface {
 
 // ==========================================defaultValue byte========================================
 
-type byteValue []byte
+type DefaultByteValue struct {
+	cot []byte
+}
 
 func ByteValue(cot []byte)  Value{
-	var tt byteValue = cot
-	return tt
+	return  &DefaultByteValue{cot:cot}
 }
 
-func (d byteValue) Len() int {
-	return len(d)
+func (d *DefaultByteValue) Len() int {
+	return len(d.cot)
 }
 
-func (d byteValue) Value() []byte {
-	return d
+func (d *DefaultByteValue) Value() []byte {
+	return d.cot
 }
 
 // ==========================================defaultValue String========================================
 
-type stringValue string
+type DefaultStringValue struct {
+	cot string
+}
 
 func StringValue(cot string) Value{
-	var tt stringValue = stringValue(cot)
-	return tt
+	return  &DefaultStringValue{cot:cot}
 }
 
-func (d stringValue) Len() int {
-	return len(d)
+func (d *DefaultStringValue) Len() int {
+	return len(d.cot)
 }
 
+func (d *DefaultStringValue) Value() string {
+	return  d.cot
+}
