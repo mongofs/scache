@@ -31,6 +31,9 @@ type cacheImpl struct {
 
 	// 当某个key被删除的时候的回调函数
 	OnCaller      func(key string, v Value)
+
+	// 程序内部发生一些定时器调用错误，注册函数调用错误的时候会调用此函数
+	// 1.定时器调用回调函数报错，将会走OnError
 	OnError 	func(error)
 	regularManger RegularManger
 }
@@ -310,7 +313,7 @@ func (c *cacheImpl) RealDel() (int, int) {
 			sd.Destroy()
 		}
 
-		if sd.expire < time.Now().Unix() && st == SDSStatusNormal{
+		if sd.expire!=0 && sd.expire < time.Now().Unix() && st == SDSStatusNormal{
 			sd.Delete()
 		}
 	}

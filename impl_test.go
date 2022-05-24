@@ -170,7 +170,7 @@ func TestCacheImpl_RegisterCron(t *testing.T) {
 		cache := New(200*1204*1024, 10*time.Second, func(key string, value Value) {
 			fmt.Println("delete the ", key, value)
 		})
-		cache.RegisterCron("testKey", 3, func() (Value, error) {
+		cache.RegisterCron("testKey", 1, func() (Value, error) {
 			in.Inc()
 			t := time.Now().Unix()
 			fmt.Printf("time : %v , 进入定时器\r\n",t)
@@ -179,7 +179,7 @@ func TestCacheImpl_RegisterCron(t *testing.T) {
 
 		Convey("实际请求次数应该小于4次 ", func() {
 			// 进行查询
-			for i := 0; i < 10; i++ {
+			for i := 0; i < 1000; i++ {
 				time.Sleep(1 * time.Second)
 				v ,err :=cache.Get("testKey")
 				if err !=nil {
@@ -190,7 +190,6 @@ func TestCacheImpl_RegisterCron(t *testing.T) {
 					continue
 				}
 				fmt.Println(v.(*DefaultStringValue).Value())
-
 			}
 			So(in.Load(),ShouldBeLessThanOrEqualTo,4)
 		})
