@@ -172,17 +172,25 @@ func TestCacheImpl_RegisterCron(t *testing.T) {
 		})
 		cache.RegisterCron("testKey", 3, func() (Value, error) {
 			in.Inc()
-			return StringValue("steven"), nil
+			t := time.Now().Unix()
+			fmt.Printf("time : %v , 进入定时器\r\n",t)
+			return StringValue(fmt.Sprintf("steven %v",t)), nil
 		})
 
 		Convey("实际请求次数应该小于4次 ", func() {
 			// 进行查询
 			for i := 0; i < 10; i++ {
-				_,err :=cache.Get("testKey")
+				time.Sleep(1 * time.Second)
+				v ,err :=cache.Get("testKey")
 				if err !=nil {
 					t.Fatal(err)
 				}
-				time.Sleep(1 * time.Second)
+				if v == nil {
+					fmt.Println(v)
+					continue
+				}
+				fmt.Println(v.(*DefaultStringValue).Value())
+
 			}
 			So(in.Load(),ShouldBeLessThanOrEqualTo,4)
 		})

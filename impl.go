@@ -105,7 +105,10 @@ func (c *cacheImpl) RegisterCron(regulation string,flushInterval int ,f /* slow 
 	if regulation == "" || f == nil || flushInterval < 0 {
 		panic(ErrInValidParam)
 	}
-	c.ticker(regulation,flushInterval,f)
+	err := c.ticker(regulation,flushInterval,f)
+	if err != nil {
+		panic(err)
+	}
 }
 // =============================================concurrency safe =========================================
 
@@ -117,13 +120,18 @@ func (c * cacheImpl) ticker (regulation string, flushInterval int ,f /* slow way
 	if val !=nil {return ErrKeyAlreadyExist}
 	t := time.NewTicker(time.Duration(flushInterval)*time.Second)
 	go func() {
-		<- t.C
-		val ,err := f()
-		if err !=nil {
-			if c.OnError!=nil {
-				c.OnError(err)
+		for {
+			v ,err := f()
+			if err !=nil {
+				if c.OnError!=nil {
+					c.OnError(err)
+				}else {
+					// todo
+					fmt.Println(err)
+				}
 			}
-			c.set(regulation,val,0)
+			c.set(regulation,v,0)
+			<- t.C
 		}
 	}()
 	return nil
