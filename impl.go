@@ -30,11 +30,13 @@ type cacheImpl struct {
 	cache    map[string]*list.Element
 
 	// 当某个key被删除的时候的回调函数
-	OnCaller      func(key string, v Value)
+	OnCaller func(key string, v Value)
 
 	// 程序内部发生一些定时器调用错误，注册函数调用错误的时候会调用此函数
 	// 1.定时器调用回调函数报错，将会走OnError
-	OnError 	func(error)
+	OnError       func(error)
+
+	// singleFlight 管理器，
 	regularManger RegularManger
 }
 
@@ -102,44 +104,49 @@ func (c *cacheImpl) Register(regulation string, expire int, f /* slow way func *
 	c.regularManger.Register(regulation, expire, f)
 }
 
-
-
-func (c *cacheImpl) RegisterCron(regulation string,flushInterval int ,f /* slow way func */ func() (Value, error)) {
+func (c *cacheImpl) RegisterCron(regulation string, flushInterval int, f /* slow way func */ func() (Value, error)) {
 	if regulation == "" || f == nil || flushInterval < 0 {
 		panic(ErrInValidParam)
 	}
-	err := c.ticker(regulation,flushInterval,f)
+	err := c.ticker(regulation, flushInterval, f)
 	if err != nil {
 		panic(err)
 	}
 }
+
 // =============================================concurrency safe =========================================
 
-
-func (c * cacheImpl) ticker (regulation string, flushInterval int ,f /* slow way func */ func() (Value, error))error{
-	if flushInterval <=0 || regulation==""{return ErrInValidParam}
-	val,_,_,err :=c.regularManger.Get(regulation)
-	if err !=nil {return err}
-	if val !=nil {return ErrKeyAlreadyExist}
-	t := time.NewTicker(time.Duration(flushInterval)*time.Second)
+func (c *cacheImpl) ticker(regulation string, flushInterval int, f /* slow way func */ func() (Value, error)) error {
+	if flushInterval <= 0 || regulation == "" {
+		return ErrInValidParam
+	}
+	val, _, _, err := c.regularManger.Get(regulation)
+	if err != nil {
+		return err
+	}
+	if val != nil {
+		return ErrKeyAlreadyExist
+	}
+	t := time.NewTicker(time.Duration(flushInterval) * time.Second)
 	go func() {
 		for {
-			v ,err := f()
-			if err !=nil {
-				if c.OnError!=nil {
+			v, er := f()
+			if er != nil {
+				if c.OnError != nil {
 					c.OnError(err)
-				}else {
+				} else {
 					// todo
 					fmt.Println(err)
 				}
+			}else {
+				c.set(regulation, v, 0)
 			}
-			c.set(regulation,v,0)
-			<- t.C
+
+			<-t.C
 		}
 	}()
 	return nil
 }
-
 
 func (c *cacheImpl) get(key string) (Value, error) {
 	// 去获取值是否存在于map中且状态不为过期状态
@@ -313,7 +320,7 @@ func (c *cacheImpl) RealDel() (int, int) {
 			sd.Destroy()
 		}
 
-		if sd.expire!=0 && sd.expire < time.Now().Unix() && st == SDSStatusNormal{
+		if sd.expire != 0 && sd.expire < time.Now().Unix() && st == SDSStatusNormal {
 			sd.Delete()
 		}
 	}

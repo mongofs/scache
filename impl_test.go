@@ -170,7 +170,7 @@ func TestCacheImpl_RegisterCron(t *testing.T) {
 		cache := New(200*1204*1024, 10*time.Second, func(key string, value Value) {
 			fmt.Println("delete the ", key, value)
 		})
-		cache.RegisterCron("testKey", 1, func() (Value, error) {
+		cache.RegisterCron("testKey", 3, func() (Value, error) {
 			in.Inc()
 			t := time.Now().Unix()
 			fmt.Printf("time : %v , 进入定时器\r\n",t)
