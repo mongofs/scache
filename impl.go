@@ -33,8 +33,12 @@ type cacheImpl struct {
 	OnCaller func(key string, v Value)
 
 	// 程序内部发生一些定时器调用错误，注册函数调用错误的时候会调用此函数
-	// 1.定时器调用回调函数报错，将会走OnError
-	OnError       func(error)
+	// 实现此方法的时候需要判断param的length
+	//	attention:
+	// 当参数大于两个的时候，第一个参数是描述，第二个参数是详细的描述（包含recover的panic ）
+	// 当参数为一个的时候就是error消息
+	// 当参数为nil的时候可以不处理
+	OnError       func(...interface{})
 
 	// singleFlight 管理器，
 	regularManger RegularManger
@@ -47,12 +51,20 @@ func New(maxByte int64, clearInterval time.Duration, clearCall func(key string, 
 		ll:            list.New(),
 		interval:      clearInterval,
 		cache:         make(map[string]*list.Element),
+		OnError: func(i ...interface{}) {
+			fmt.Println(i)
+		},
 		OnCaller:      clearCall,
 		regularManger: NewRegularManager(),
 	}
 	c.clear()
 	return c
 }
+
+func (c *cacheImpl) SetErrorHandler(handler func( ...interface{}))  {
+	c.OnError= handler
+}
+
 
 func (c *cacheImpl) Get(key string) (Value, error) {
 	return c.get(key)
@@ -129,14 +141,17 @@ func (c *cacheImpl) ticker(regulation string, flushInterval int, f /* slow way f
 	}
 	t := time.NewTicker(time.Duration(flushInterval) * time.Second)
 	go func() {
+		defer func() {
+			// issue error #9
+			if err := recover();err !=nil {
+				c.OnError(fmt.Sprintf("regulation is %s",regulation),err)
+			}
+		}()
 		for {
 			v, er := f()
 			if er != nil {
 				if c.OnError != nil {
-					c.OnError(err)
-				} else {
-					// todo
-					fmt.Println(err)
+					c.OnError(er)
 				}
 			}else {
 				c.set(regulation, v, 0)

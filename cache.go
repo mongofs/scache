@@ -27,6 +27,9 @@ type Cache interface {
 	// 覆盖已经存在的某个key，如果key不存在，就返回，否则就覆盖
 	SetEX(key string, value Value) error
 
+	// 接管Error方法
+	SetErrorHandler(handler func(...interface{}))
+
 	// 设置一个值，并为这个值设置一个过期时间
 	SetWithTTL(key string, content Value, ttl int) error
 
