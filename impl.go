@@ -211,7 +211,6 @@ func (c *cacheImpl) set(key string, value Value, expire int) error {
 		c.cache[key] = eles
 		c.nBytes += int64(newSds.Calculation())
 	}
-
 	var freeBytes, freeElems int64
 	for c.maxBytes != 0 && c.maxBytes < c.nBytes {
 		freeBytes += c.removeOldest()
@@ -230,7 +229,6 @@ func (c *cacheImpl) del(key string, del bool) {
 		c.RealDel()
 		return
 	}
-
 	if v, ok := c.getElem(key); ok {
 		s := v.Value.(*sds)
 		c.fakeDel(s)
