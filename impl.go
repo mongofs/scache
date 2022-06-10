@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 )
@@ -38,7 +39,7 @@ type cacheImpl struct {
 	// 当参数大于两个的时候，第一个参数是描述，第二个参数是详细的描述（包含recover的panic ）
 	// 当参数为一个的时候就是error消息
 	// 当参数为nil的时候可以不处理
-	OnError       func(...interface{})
+	OnError func(...interface{})
 
 	// singleFlight 管理器，
 	regularManger RegularManger
@@ -46,11 +47,11 @@ type cacheImpl struct {
 
 func New(maxByte int64, clearInterval time.Duration, clearCall func(key string, value Value)) Cache {
 	c := &cacheImpl{
-		maxBytes:      maxByte,
-		nBytes:        0,
-		ll:            list.New(),
-		interval:      clearInterval,
-		cache:         make(map[string]*list.Element),
+		maxBytes: maxByte,
+		nBytes:   0,
+		ll:       list.New(),
+		interval: clearInterval,
+		cache:    make(map[string]*list.Element),
 		OnError: func(i ...interface{}) {
 			fmt.Println(i)
 		},
@@ -61,10 +62,9 @@ func New(maxByte int64, clearInterval time.Duration, clearCall func(key string, 
 	return c
 }
 
-func (c *cacheImpl) SetErrorHandler(handler func( ...interface{}))  {
-	c.OnError= handler
+func (c *cacheImpl) SetErrorHandler(handler func(...interface{})) {
+	c.OnError = handler
 }
-
 
 func (c *cacheImpl) Get(key string) (Value, error) {
 	return c.get(key)
@@ -143,8 +143,8 @@ func (c *cacheImpl) ticker(regulation string, flushInterval int, f /* slow way f
 	go func() {
 		defer func() {
 			// issue error #9
-			if err := recover();err !=nil {
-				c.OnError(fmt.Sprintf("regulation is %s",regulation),err)
+			if err := recover(); err != nil {
+				c.OnError(fmt.Sprintf("regulation is %s", regulation), err)
 			}
 		}()
 		for {
@@ -153,7 +153,7 @@ func (c *cacheImpl) ticker(regulation string, flushInterval int, f /* slow way f
 				if c.OnError != nil {
 					c.OnError(er)
 				}
-			}else {
+			} else {
 				c.set(regulation, v, 0)
 			}
 
@@ -203,7 +203,18 @@ func (c *cacheImpl) set(key string, value Value, expire int) error {
 			kv.expire = 0
 		}
 		kv.Value = value
-		c.nBytes += int64(oldLen - value.Len())
+
+		//当oldLen小于value.Len()的时候，相减变成负数，此时c.nBytes就有可能等于负数
+		newLen := int64(oldLen - value.Len())
+		if newLen < 0 {
+			c.nBytes += int64(math.Abs(float64(newLen)))
+		} else {
+			c.nBytes -= newLen
+			if c.nBytes < 0 {
+				c.nBytes = 0
+			}
+		}
+		//c.nBytes += int64(oldLen - value.Len())
 	} else {
 		// 创建新的sds结构体
 		newSds := NewSDS(key, value, expire)
